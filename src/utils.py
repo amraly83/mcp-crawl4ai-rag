@@ -7,10 +7,11 @@ from typing import List, Dict, Any, Optional, Tuple
 import json
 from supabase import create_client, Client
 from urllib.parse import urlparse
-import openai
+from mistralai.client import MistralClient
 
-# Load OpenAI API key for embeddings
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Load Mistral AI API key for embeddings and chat
+mistral_api_key = os.getenv("MISTRAL_API_KEY")
+mistral_client = MistralClient(api_key=mistral_api_key)
 
 def get_supabase_client() -> Client:
     """
@@ -29,7 +30,7 @@ def get_supabase_client() -> Client:
 
 def create_embeddings_batch(texts: List[str]) -> List[List[float]]:
     """
-    Create embeddings for multiple texts in a single API call.
+    Create embeddings for multiple texts in a single API call using Mistral AI.
     
     Args:
         texts: List of texts to create embeddings for
@@ -41,19 +42,20 @@ def create_embeddings_batch(texts: List[str]) -> List[List[float]]:
         return []
         
     try:
-        response = openai.embeddings.create(
-            model="text-embedding-3-small", # Hardcoding embedding model for now, will change this later to be more dynamic
+        response = mistral_client.embeddings(
+            model="mistral-embed",  # Mistral's embedding model
             input=texts
         )
         return [item.embedding for item in response.data]
     except Exception as e:
-        print(f"Error creating batch embeddings: {e}")
+        print(f"Error creating batch embeddings with Mistral: {e}")
         # Return empty embeddings if there's an error
-        return [[0.0] * 1536 for _ in range(len(texts))]
+        # mistral-embed has a dimension of 1024
+        return [[0.0] * 1024 for _ in range(len(texts))]
 
 def create_embedding(text: str) -> List[float]:
     """
-    Create an embedding for a single text using OpenAI's API.
+    Create an embedding for a single text using Mistral AI's API.
     
     Args:
         text: Text to create an embedding for
@@ -63,15 +65,16 @@ def create_embedding(text: str) -> List[float]:
     """
     try:
         embeddings = create_embeddings_batch([text])
-        return embeddings[0] if embeddings else [0.0] * 1536
+        return embeddings[0] if embeddings else [0.0] * 1024
     except Exception as e:
-        print(f"Error creating embedding: {e}")
+        print(f"Error creating embedding with Mistral: {e}")
         # Return empty embedding if there's an error
-        return [0.0] * 1536
+        # mistral-embed dimension is 1024
+        return [0.0] * 1024
 
 def generate_contextual_embedding(full_document: str, chunk: str) -> Tuple[str, bool]:
     """
-    Generate contextual information for a chunk within a document to improve retrieval.
+    Generate contextual information for a chunk within a document to improve retrieval using Mistral AI.
     
     Args:
         full_document: The complete document text
@@ -82,7 +85,7 @@ def generate_contextual_embedding(full_document: str, chunk: str) -> Tuple[str, 
         - The contextual text that situates the chunk within the document
         - Boolean indicating if contextual embedding was performed
     """
-    model_choice = os.getenv("MODEL_CHOICE")
+    model_choice = os.getenv("MODEL_CHOICE", "mistral-small-latest")  # Default to a Mistral model for chat
     
     try:
         # Create the prompt for generating contextual information
@@ -95,8 +98,8 @@ Here is the chunk we want to situate within the whole document
 </chunk> 
 Please give a short succinct context to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk. Answer only with the succinct context and nothing else."""
 
-        # Call the OpenAI API to generate contextual information
-        response = openai.chat.completions.create(
+        # Call the Mistral AI API to generate contextual information
+        response = mistral_client.chat(
             model=model_choice,
             messages=[
                 {"role": "system", "content": "You are a helpful assistant that provides concise contextual information."},
@@ -115,7 +118,7 @@ Please give a short succinct context to situate this chunk within the overall do
         return contextual_text, True
     
     except Exception as e:
-        print(f"Error generating contextual embedding: {e}. Using original chunk instead.")
+        print(f"Error generating contextual embedding with Mistral: {e}. Using original chunk instead.")
         return chunk, False
 
 def process_chunk_with_context(args):
