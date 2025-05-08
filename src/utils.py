@@ -7,11 +7,11 @@ from typing import List, Dict, Any, Optional, Tuple
 import json
 from supabase import create_client, Client
 from urllib.parse import urlparse
-from mistralai.client import MistralClient
+from mistralai import Mistral
 
 # Load Mistral AI API key for embeddings and chat
 mistral_api_key = os.getenv("MISTRAL_API_KEY")
-mistral_client = MistralClient(api_key=mistral_api_key)
+mistral_client = Mistral(api_key=mistral_api_key)
 
 def get_supabase_client() -> Client:
     """
@@ -42,7 +42,7 @@ def create_embeddings_batch(texts: List[str]) -> List[List[float]]:
         return []
         
     try:
-        response = mistral_client.embeddings(
+        response = mistral_client.embeddings.create(
             model="mistral-embed",  # Mistral's embedding model
             input=texts
         )
@@ -99,7 +99,7 @@ Here is the chunk we want to situate within the whole document
 Please give a short succinct context to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk. Answer only with the succinct context and nothing else."""
 
         # Call the Mistral AI API to generate contextual information
-        response = mistral_client.chat(
+        response = mistral_client.chat.complete(
             model=model_choice,
             messages=[
                 {"role": "system", "content": "You are a helpful assistant that provides concise contextual information."},
